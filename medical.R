@@ -50,7 +50,7 @@ csv <- explain(x_i, approach = c('empirical', rep('gaussian', 9)),
   select(-none)
 
 # Interventional Shapley values
-isv <- explain(x_i, approach = c('empirical', rep('causal', 9)), 
+isv <- explain(x_i, approach = 'causal', 
                explainer = explainer, prediction_zero = phi_0,
                ordering = list(c(1:3), c(4:7), c(8:10)))$dt %>%
   select(-none)
@@ -84,24 +84,24 @@ explainer <- shapr(x_ref, f)
 phi_0 <- mean(subspace$y)
 
 # Marginal Shapley values
-msv <- explain(x_i, approach = 'empirical', type = 'independence',
-               explainer = explainer, prediction_zero = phi_0)$dt %>%
+msv_r <- explain(x_i, approach = 'empirical', type = 'independence',
+                 explainer = explainer, prediction_zero = phi_0)$dt %>%
   select(-none)
 
 # Conditional Shapley values
-csv <- explain(x_i, approach = c('empirical', rep('gaussian', 9)),
-               explainer = explainer, prediction_zero = phi_0)$dt %>%
+csv_r <- explain(x_i, approach = c('empirical', rep('gaussian', 9)),
+                 explainer = explainer, prediction_zero = phi_0)$dt %>%
   select(-none)
 
 # Interventional Shapley values
-isv <- explain(x_i, approach = c('empirical', rep('causal', 9)), 
-               explainer = explainer, prediction_zero = phi_0,
-               ordering = list(c(1:3), c(4:7), c(8:10)))$dt %>%
+isv_r <- explain(x_i, approach = 'causal', 
+                 explainer = explainer, prediction_zero = phi_0,
+                 ordering = list(c(1:3), c(4:7), c(8:10)))$dt %>%
   select(-none)
 
 # Plot results
 vals <- c('Marginal', 'Conditional', 'Interventional')
-rbind(msv, csv, isv) %>%
+rbind(msv_r, csv_r, isv_r) %>%
   mutate(value = factor(rep(vals, each = 45), levels = vals)) %>%
   pivot_longer(cols = -value, names_to = 'feature', values_to = 'phi') %>%
   ggplot(aes(phi, feature, fill = phi)) + 

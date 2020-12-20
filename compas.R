@@ -5,7 +5,10 @@ setwd('~/Documents/rational_shapley')
 library(data.table)
 library(tidyverse)
 library(ranger)
+library(fastshap)
+library(treeshap)
 library(shapr) 
+library(ggsci)
 library(doMC)
 registerDoMC(8)
 
@@ -31,49 +34,17 @@ df <- df %>%
 n <- nrow(df)
 
 # Preprocess
-x <- df %>% select(-y)
+x <- model.matrix(~ ., data = select(df, -y))
+x <- x[, -1]
 y <- df$y
-f <- ranger(x = x, y = y, num.trees = 1000)
+f <- ranger(x = x, y = y)
 
 # Focus on high risk defendants
-x_i <- x %>%
+x_i <- df %>%
   mutate(y_hat = f$predictions) %>%
   filter(y_hat >= quantile(y_hat, 0.95))
-
-# Prep
-explainer <- shapr(x, f)
-phi_0 <- mean(y)
-
-
-
-
-
-
-
-# Marginal Shapley values
-msv <- explain(select(x_i, -y_hat), approach = 'empirical', type = 'independence',
-               explainer = explainer, prediction_zero = phi_0)$dt %>%
-  select(-none)
-
-# Conditional Shapley values
-csv <- explain(select(x_i, -y_hat), approach = 'ctree', explainer = explainer, 
-               prediction_zero = phi_0)$dt %>%
-  select(-none)
-
-# Interventional Shapley values
-
-
-
-
-
-
-# Conditional Shapley values
-csv_ref <- ranger.unify(f, x)
-csv <- treeshap(csv_ref, x_i)
-race <- csv$shaps[[3]] + csv$shaps[[4]]
-csv <- csv$shaps %>%
-  select(-starts_with('race')) %>%
-  mutate(race = race)
+x_i <- model.matrix(~ ., data = select(x_i, -y, -y_hat))
+x_i <- x_i[, -1]
 
 # Marginal Shapley values
 p_wrap <- function(object, newdata) {
@@ -87,57 +58,54 @@ msv <- msv %>%
   select(-starts_with('race')) %>%
   mutate(race = race)
 
+# Conditional Shapley values
+csv_ref <- ranger.unify(f, x)
+csv <- treeshap(csv_ref, x_i)
+race <- csv$shaps[[3]] + csv$shaps[[4]]
+csv <- csv$shaps %>%
+  select(-starts_with('race')) %>%
+  mutate(race = race)
+
+# Interventional Shapley values
+explainer <- shapr(x, f)
+phi_0 <- mean(y)
+isv <- shapr::explain(x_i, approach = 'causal', n_samples = 1000,
+                      explainer = explainer, prediction_zero = phi_0,
+                      ordering = list(c(1:2), c(3:6)))$dt %>%
+  select(-none)
+race <- isv[[3]] + isv[[4]]
+isv <- isv %>%
+  select(-starts_with('race')) %>%
+  mutate(race = race)
+
 # Plot results
-rbind(msv, csv) %>%
+vals <- c('Marginal', 'Conditional', 'Interventional')
+rbind(msv, csv, isv) %>%
   rename(sex = sexMale, priors = priors_count, crim = crimM) %>%
-  mutate(value = rep(c('Marginal', 'Conditional'), each = nrow(msv))) %>%
-  mutate(value = factor(value, levels = c('Marginal', 'Conditional'))) %>%
+  mutate(value = factor(rep(vals, each = 290), levels = vals)) %>%
   pivot_longer(cols = -value, names_to = 'feature', values_to = 'phi') %>%
   ggplot(aes(phi, feature, fill = phi)) + 
-  geom_jitter(size = 2, width = 0, height = 0.1, color = 'black', pch = 21) + 
+  geom_jitter(size = 2, alpha = 0.75, width = 0, height = 0.1, 
+              color = 'black', pch = 21) + 
   geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
   scale_fill_viridis_c('Shapley\nValue', option = 'B') +
-  labs(x = 'Shapley Value', y = 'Feature') + 
+  labs(x = 'Shapley Value', y = 'Feature', title = 'Classical Shapley Values') 
   theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ value)
+ggsave('compas_classical_shap.pdf', width = 10, height = 7)
 
-# Boxplot of Shapley values by race
-dat <- df %>%
-  mutate(y_hat = f$predictions) %>%
-  filter(y_hat >= quantile(y_hat, 0.95)) %>%
-  mutate(Marginal = msv[, 5], Conditional = csv[, 5]) %>%
-  select(race, Marginal, Conditional) %>%
-  rename(Race = race) %>%
-  pivot_longer(cols = Marginal:Conditional, names_to = 'value', values_to = 'phi') %>%
-  mutate(value = factor(value, levels = c('Marginal', 'Conditional')),
-         Race = factor(Race, levels = c('African-American', 'Caucasian', 'Hispanic')))
-ggplot(dat, aes(Race, phi, color = Race)) + 
-  geom_boxplot() + 
-  geom_jitter(size = 1.5, alpha = 0.75) +
-  scale_color_d3() +
-  geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') +
-  theme_bw() + 
-  labs(y = 'Shapley Value') +
-  facet_wrap(~ value)
 
-### RATIONAL SHAPLEY ### 
+### RATIONAL SHAPLEY VALUES ###
 
 # Define the subspace
 subspace <- df %>%
   mutate(y_hat = f$predictions) %>%
   filter(age <= 28, priors_count >= 1, y_hat <= median(y_hat)) 
-x_ref <- model.matrix(~ ., data = subspace)
-x_ref <- x_ref[, 2:7]
+x_ref <- model.matrix(~ ., data = select(subspace, -y, -y_hat))
+x_ref <- x_ref[, -1]
 
-# Conditional value function
-csv_ref <- ranger.unify(f, x_ref)
-csv_r <- treeshap(csv_ref, x_i)
-race <- csv_r$shaps[[3]] + csv_r$shaps[[4]]
-csv_r <- csv_r$shaps %>%
-  select(-starts_with('race')) %>%
-  mutate(race = race)
-
-# Marginal value function
+# Marginal Shapley values
 msv_r <- fastshap::explain(f, X = x_ref, nsim = 2000, pred_wrapper = p_wrap, 
                            newdata = x_i, adjust = TRUE)
 race <- msv_r[[3]] + msv_r[[4]]
@@ -146,72 +114,91 @@ msv_r <- msv_r %>%
   select(-starts_with('race')) %>%
   mutate(race = race)
 
+# Treeshap isn't working with this subspace for some reason...switching to 
+# shapr::approach = 'empirical'
+explainer <- shapr(x_ref, f)
+phi_0 <- mean(subspace$y)
 
+# Conditional Shapley values
+csv_r <- shapr::explain(x_i, approach = 'empirical', n_samples = 1000,
+                        explainer = explainer, prediction_zero = phi_0)$dt %>%
+  select(-none)
+race <- csv_r[[3]] + csv_r[[4]]
+csv_r <- csv_r %>%
+  select(-starts_with('race')) %>%
+  mutate(race = race)
 
+# Interventional Shapley values
+isv_r <- shapr::explain(x_i, approach = 'causal', n_samples = 1000,
+                        explainer = explainer, prediction_zero = phi_0,
+                        ordering = list(c(1:2), c(3:6)))$dt %>%
+  select(-none)
+race <- isv_r[[3]] + isv_r[[4]]
+isv_r <- isv_r %>%
+  select(-starts_with('race')) %>%
+  mutate(race = race)
 
-
-
-
-
-rbind(msv_r, csv_r) %>%
+# Plot
+rbind(msv_r, csv_r, isv_r) %>%
   rename(sex = sexMale, priors = priors_count, crim = crimM) %>%
-  mutate(value = rep(c('Marginal', 'Conditional'), each = nrow(msv))) %>%
-  mutate(value = factor(value, levels = c('Marginal', 'Conditional'))) %>%
+  mutate(value = factor(rep(vals, each = 290), levels = vals)) %>%
   pivot_longer(cols = -value, names_to = 'feature', values_to = 'phi') %>%
   ggplot(aes(phi, feature, fill = phi)) + 
-  geom_jitter(size = 2, width = 0, height = 0.1, color = 'black', pch = 21) + 
+  geom_jitter(size = 2, alpha = 0.75, width = 0, height = 0.1, 
+              color = 'black', pch = 21) + 
   geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
   scale_fill_viridis_c('Shapley\nValue', option = 'B') +
-  labs(x = 'Shapley Value', y = 'Feature') + 
+  labs(x = 'Shapley Value', y = 'Feature', title = 'Rational Shapley Values') 
   theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ value)
+ggsave('compas_rational_shap.pdf', width = 10, height = 7)
 
+### Boxplots ###
 
+# Classical
+dat <- df %>%
+  mutate(y_hat = f$predictions) %>%
+  filter(y_hat >= quantile(y_hat, 0.95)) %>%
+  mutate(Marginal = msv$race, Conditional = csv$race, 
+         Interventional = isv$race) %>%
+  select(race, Marginal, Conditional, Interventional) %>%
+  rename(Race = race) %>%
+  pivot_longer(cols = Marginal:Interventional, names_to = 'value', values_to = 'phi') %>%
+  mutate(value = factor(value, levels = c('Marginal', 'Conditional', 'Interventional')),
+         Race = factor(Race, levels = c('African-American', 'Caucasian', 'Hispanic')))
+ggplot(dat, aes(Race, phi, color = Race)) + 
+  geom_boxplot() + 
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  scale_color_npg() +
+  geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  labs(title = 'Classical Shapley Values', y = 'Shapley Value') +
+  facet_wrap(~ value)
+ggsave('compas_classical_boxplot.pdf', width = 10, height = 7)
 
-# Scatter: admissible
-tmp <- data.frame(
-  Classical = abs(c(msv$age, msv$priors_count, csv$age, csv$priors_count)),
-  Rational = abs(c(msv_r$age, msv_r$priors_count, csv_r$age, csv_r$priors_count)),
-  Reference = rep(c('Marginal', 'Conditional'), each = 20),
-  Feature = rep(c('Age', 'Priors'), each = 10)
-)
-tmp <- tmp %>% 
-  mutate(Reference = factor(Reference, levels = c('Marginal', 'Conditional')))
-ggplot(tmp, aes(Classical, Rational)) + 
-  geom_point() + 
-  geom_abline(intercept = 0, slope = 1, color = 'red', linetype = 'dashed') + 
-  facet_wrap(Reference ~ Feature, ncol = 2) + 
-  theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5))
-ggsave('Conditioning.pdf', width = 6, height = 6)
-
-# Binomial test
-x <- ifelse(tmp$Classical - tmp$Rational > 0, 0, 1)
-binom.test(x, length(x), alt = 'less')
-
-# Scatter: inadmissible
-# https://fishandwhistle.net/post/2018/modifying-facet-scales-in-ggplot2/
-tmp <- data.frame(
-  Classical = c(msv$sex, msv$race, csv$sex, csv$race),
-  Rational = c(msv_r$sex, msv_r$race, csv_r$sex, csv_r$race),
-  Reference = rep(c('Marginal', 'Conditional'), each = 20),
-  Feature = rep(c('Sex', 'Race'), each = 10)
-)
-tmp <- tmp %>% 
-  mutate(Reference = factor(Reference, levels = c('Marginal', 'Conditional')))
-ggplot(tmp, aes(Classical, Rational)) + 
-  geom_point() + 
-  geom_abline(intercept = 0, slope = 1, color = 'red', linetype = 'dashed') + 
-  facet_wrap_equal(Reference ~ Feature, ncol = 2, scales = 'free') + 
-  theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5))
-ggsave('Inadmissible.pdf', width = 6, height = 6)
-
-
-
-
-
-
+# Rational
+dat <- df %>%
+  mutate(y_hat = f$predictions) %>%
+  filter(y_hat >= quantile(y_hat, 0.95)) %>%
+  mutate(Marginal = msv_r$race, Conditional = csv_r$race, 
+         Interventional = isv_r$race) %>%
+  select(race, Marginal, Conditional, Interventional) %>%
+  rename(Race = race) %>%
+  pivot_longer(cols = Marginal:Interventional, names_to = 'value', values_to = 'phi') %>%
+  mutate(value = factor(value, levels = c('Marginal', 'Conditional', 'Interventional')),
+         Race = factor(Race, levels = c('African-American', 'Caucasian', 'Hispanic')))
+ggplot(dat, aes(Race, phi, color = Race)) + 
+  geom_boxplot() + 
+  geom_jitter(size = 1.5, alpha = 0.75) +
+  scale_color_npg() +
+  geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  labs(title = 'Rational Shapley Values', y = 'Shapley Value') +
+  facet_wrap(~ value)
+ggsave('compas_rational_boxplot.pdf', width = 10, height = 7)
 
 
 
