@@ -32,7 +32,7 @@ f$coefficients <- beta
 x_i <- df %>%
   mutate(y_hat = predict(f, df)) %>%
   filter(y_hat >= quantile(y_hat, 0.9)) %>%
-  select(-y, -y_hat) %>%
+  select(-starts_with('y')) %>%
   as.matrix(.)
 
 # Define reference distribution
@@ -57,17 +57,21 @@ isv <- explain(x_i, approach = 'causal',
 
 # Plot results
 vals <- c('Marginal', 'Conditional', 'Interventional')
-rbind(msv, csv, isv) %>%
-  mutate(value = factor(rep(vals, each = 45), levels = vals)) %>%
-  pivot_longer(cols = -value, names_to = 'feature', values_to = 'phi') %>%
-  ggplot(aes(phi, feature, fill = phi)) + 
-  geom_jitter(size = 2, width = 0, height = 0.1, color = 'black', pch = 21) + 
+tmp <- rbind(msv, csv, isv) %>%
+  mutate(reference = factor(rep(vals, each = nrow(msv)), levels = vals)) %>%
+  pivot_longer(cols = -reference, names_to = 'feature', values_to = 'phi') %>%
+  mutate(value = rep(as.numeric(t(x_i)), times = 3))
+fwrite(tmp, 'medical_classical.csv')
+ggplot(tmp, aes(phi, feature, fill = value)) + 
+  geom_jitter(size = 1.5, width = 0, height = 0.2, color = 'black', pch = 21,
+              alpha = 0.75) + 
   geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
-  scale_fill_viridis_c('Shapley\nValue', option = 'B') +
-  xlab('Shapley Value') + ylab('Feature') + 
+  scale_fill_viridis_c('Feature\nValue', option = 'B') +
+  labs(x = 'Shapley Value', y = 'Feature', title = 'Classical Shapley Values') +
   theme_bw() + 
   theme(plot.title = element_text(hjust = 0.5)) + 
-  facet_wrap(~ value)
+  facet_wrap(~ reference)
+ggsave('medical_classical_shap.pdf', width = 10, height = 7)
 
 
 ### RATIONAL SHAPLEY ### 
@@ -76,7 +80,6 @@ rbind(msv, csv, isv) %>%
 subspace <- df %>% 
   filter(sex > 0, age > quantile(age, 0.25), y < median(y)) %>%
   mutate(sex = sex + rnorm(76, sd = 0.001)) # Crashes when a feature is totally invariant
-phi_0 <- mean(subspace$y)
 x_ref <- subspace %>% 
   select(-y) %>%
   as.matrix(.)
@@ -100,19 +103,21 @@ isv_r <- explain(x_i, approach = 'causal',
   select(-none)
 
 # Plot results
-vals <- c('Marginal', 'Conditional', 'Interventional')
-rbind(msv_r, csv_r, isv_r) %>%
-  mutate(value = factor(rep(vals, each = 45), levels = vals)) %>%
-  pivot_longer(cols = -value, names_to = 'feature', values_to = 'phi') %>%
-  ggplot(aes(phi, feature, fill = phi)) + 
-  geom_jitter(size = 2, width = 0, height = 0.1, color = 'black', pch = 21) + 
+tmp <- rbind(msv_r, csv_r, isv_r) %>%
+  mutate(reference = factor(rep(vals, each = nrow(msv)), levels = vals)) %>%
+  pivot_longer(cols = -reference, names_to = 'feature', values_to = 'phi') %>%
+  mutate(value = rep(as.numeric(t(x_i)), times = 3))
+fwrite(tmp, 'medical_rational.csv')
+ggplot(tmp, aes(phi, feature, fill = value)) + 
+  geom_jitter(size = 1.5, width = 0, height = 0.2, color = 'black', pch = 21,
+              alpha = 0.75) + 
   geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
-  scale_fill_viridis_c('Shapley\nValue', option = 'B') +
-  xlab('Shapley Value') + ylab('Feature') + 
+  scale_fill_viridis_c('Feature\nValue', option = 'B') +
+  labs(x = 'Shapley Value', y = 'Feature', title = 'Rational Shapley Values') +
   theme_bw() + 
   theme(plot.title = element_text(hjust = 0.5)) + 
-  facet_wrap(~ value)
-
+  facet_wrap(~ reference)
+ggsave('medical_rational_shap.pdf', width = 10, height = 7)
 
 
 
