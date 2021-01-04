@@ -67,7 +67,7 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
               alpha = 0.75) + 
   geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
-  labs(x = 'Shapley Value', y = 'Feature', title = 'Classical Shapley Values') +
+  labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
   theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
@@ -113,7 +113,7 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
               alpha = 0.75) + 
   geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
-  labs(x = 'Shapley Value', y = 'Feature', title = 'Rational Shapley Values') +
+  labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
   theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
