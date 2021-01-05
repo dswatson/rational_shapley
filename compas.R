@@ -81,7 +81,6 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
   labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
 ggsave('compas_classical_shap.pdf', width = 10, height = 7)
 
@@ -126,7 +125,6 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
   labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
 ggsave('compas_rational_shap.pdf', width = 10, height = 7)
 
@@ -151,7 +149,7 @@ ggplot(dat, aes(Race, phi, fill = Race)) +
   scale_fill_d3() +
   geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
+  theme(legend.position = 'bottom') + 
   ylab('Shapley Value') +
   facet_wrap(~ value)
 ggsave('compas_classical_boxplot.pdf', width = 10, height = 7)
@@ -174,7 +172,7 @@ ggplot(dat_r, aes(Race, phi, fill = Race)) +
   scale_fill_d3() +
   geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
+  theme(legend.position = 'bottom') + 
   ylab('Shapley Value') +
   facet_wrap(~ value)
 ggsave('compas_rational_boxplot.pdf', width = 10, height = 7)

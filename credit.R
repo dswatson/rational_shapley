@@ -132,7 +132,6 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
   labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
 ggsave('credit_classical_shap.pdf', width = 10, height = 7)
 
@@ -143,8 +142,7 @@ ggsave('credit_classical_shap.pdf', width = 10, height = 7)
 subspace <- df %>% 
   filter(y_hat >= quantile(y_hat, 0.75)) 
 phi_0 <- qlogis(mean(subspace$y_hat))
-x_ref <- subspace %>% 
-  select(-starts_with('y'))
+x_ref <- subspace %>% select(-starts_with('y'))
 explainer <- shapr(x_ref, f, feature_labels = colnames(x))
 
 # Marginal Shapley values
@@ -178,9 +176,28 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
   labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
 ggsave('credit_rational_shap.pdf', width = 10, height = 7)
+
+# The case of Ruth
+x_i <- df %>% 
+  filter(gender == 0, between(y_hat, 0.725, 0.734)) %>%
+  head(1) %>%
+  select(-starts_with('y'))
+
+# Relevant subspace
+subspace <- df %>%
+  filter(gender == 0, marital == 0, age >= x_i$age, y_hat >= 0.74)
+x_ref <- subspace %>% select(-starts_with('y'))
+
+# Rational Shapley
+phi_0 <- qlogis(mean(subspace$y_hat))
+explainer <- shapr(x_ref, f, feature_labels = colnames(x))
+isv_ruth <- explain(x_i, approach = 'causal',
+                    explainer = explainer, prediction_zero = phi_0,
+                    ordering = list(c(1:3), c(4:7)))$dt %>%
+  select(-none)
+
 
 
 

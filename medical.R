@@ -69,7 +69,6 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
   labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
 ggsave('medical_classical_shap.pdf', width = 10, height = 7)
 
@@ -115,9 +114,34 @@ ggplot(tmp, aes(phi, feature, fill = value)) +
   scale_fill_viridis_c('Feature\nValue', option = 'B') +
   labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
-  theme(plot.title = element_text(hjust = 0.5)) + 
   facet_wrap(~ reference)
 ggsave('medical_rational_shap.pdf', width = 10, height = 7)
+
+# The case of Bert & Ernie
+x_i <- x_i %>% 
+  as.data.frame(.) %>% 
+  filter(bmi > 0.05, map > 0.05) %>% 
+  mutate(idx = row_number()) %>% 
+  filter(idx == 3) %>% 
+  select(-idx) 
+
+# Bert
+b <- df %>%
+  filter(bmi <= quantile(bmi, 0.2))
+explainer <- shapr(select(b, -y), f)
+phi_0 <- mean(b$y)
+csv_b <- explain(x_i, approach = c('empirical', rep('gaussian', 9)),
+                 explainer = explainer, prediction_zero = phi_0)$dt %>%
+  select(-none)
+
+# Ernie
+e <- df %>% 
+  filter(map <= quantile(map, 0.2))
+explainer <- shapr(select(e, -y), f)
+phi_0 <- mean(e$y)
+csv_e <- explain(x_i, approach = c('empirical', rep('gaussian', 9)),
+                 explainer = explainer, prediction_zero = phi_0)$dt %>%
+  select(-none)
 
 
 
