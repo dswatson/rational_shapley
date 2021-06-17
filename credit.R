@@ -18,7 +18,7 @@ df <- fread('german.data')
 colnames(df) <- c('chk_acct', 'duration', 'credit_his', 'purpose', 'amount', 
                   'savings2', 'present_emp', 'installment_rate', 'sex', 
                   'other_debtor', 'present_resid', 'property', 'age', 
-                  'other_install', 'housing', 'n_credits', 'job2', 'n_people', 
+                  'other_install', 'housing2', 'n_credits', 'job2', 'n_people', 
                   'telephone', 'foreign', 'response')
 
 # Recode
@@ -116,24 +116,14 @@ isv <- explain(x_i, approach = 'causal',
                ordering = list(c(1:3), c(4:7)))$dt %>%
   select(-none)
 
-# Plot results
+# Tidy
 vals <- c('Marginal', 'Conditional', 'Interventional')
-tmp <- rbind(msv, csv, isv) %>%
+res_c <- rbind(msv, csv, isv) %>%
   mutate(reference = factor(rep(vals, each = nrow(msv)), levels = vals)) %>%
   pivot_longer(cols = -reference, names_to = 'feature', values_to = 'phi') %>%
-  mutate(value = rep(as.numeric(t(x_i)), times = 3))%>%
+  mutate(value = rep(as.numeric(t(x_i)), times = 3), type = 'Classical')%>%
   as.data.table(.)
-tmp[!feature %in% c('gender', 'marital'), value := scale(value), by = feature]
-fwrite(tmp, 'credit_classical.csv')
-ggplot(tmp, aes(phi, feature, fill = value)) + 
-  geom_jitter(size = 1.5, width = 0, height = 0.2, color = 'black', pch = 21,
-              alpha = 0.75) + 
-  geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
-  scale_fill_viridis_c('Feature\nValue', option = 'B') +
-  labs(x = 'Shapley Value', y = 'Feature') +
-  theme_bw() + 
-  facet_wrap(~ reference)
-ggsave('credit_classical_shap.pdf', width = 10, height = 7)
+res_c[!feature %in% c('gender', 'marital'), value := scale(value), by = feature]
 
 
 ### RATIONAL SHAPLEY ### 
@@ -161,23 +151,26 @@ isv_r <- explain(x_i, approach = 'causal',
                  ordering = list(c(1:3), c(4:7)))$dt %>%
   select(-none)
 
-# Plot results
-tmp <- rbind(msv_r, csv_r, isv_r) %>%
+# Tidy, export
+res_r <- rbind(msv_r, csv_r, isv_r) %>%
   mutate(reference = factor(rep(vals, each = nrow(msv)), levels = vals)) %>%
   pivot_longer(cols = -reference, names_to = 'feature', values_to = 'phi') %>%
-  mutate(value = rep(as.numeric(t(x_i)), times = 3)) %>%
+  mutate(value = rep(as.numeric(t(x_i)), times = 3), type = 'Rational') %>%
   as.data.table(.)
-tmp[!feature %in% c('gender', 'marital'), value := scale(value), by = feature]
-fwrite(tmp, 'credit_rational.csv')
-ggplot(tmp, aes(phi, feature, fill = value)) + 
+res_r[!feature %in% c('gender', 'marital'), value := scale(value), by = feature]
+res <- rbind(res_c, res_r)
+fwrite(res, 'credit_res.csv')
+
+# Plot
+ggplot(res, aes(phi, feature, fill = value)) + 
   geom_jitter(size = 1.5, width = 0, height = 0.2, color = 'black', pch = 21,
               alpha = 0.75) + 
   geom_vline(xintercept = 0, color = 'red', linetype = 'dashed') +
-  scale_fill_viridis_c('Feature\nValue', option = 'B') +
+  scale_fill_gradient2('Feature\nValue', low = 'blue', high = 'red') +
   labs(x = 'Shapley Value', y = 'Feature') +
   theme_bw() + 
-  facet_wrap(~ reference)
-ggsave('credit_rational_shap.pdf', width = 10, height = 7)
+  facet_grid(type ~ reference)
+ggsave('credit_shap.pdf', width = 10, height = 7)
 
 # The case of Ruth
 x_i <- df %>% 

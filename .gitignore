@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rapp.history
+.DS_Store
+rational_shapley.Rproj
+*.csv
+*.data
+*.pdf
+*.rds
+*.zip
+*2.R
+*9.R
